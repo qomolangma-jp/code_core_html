@@ -1,135 +1,170 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ユーザー新規登録</title>
-  <!-- CSSライブラリ（Bootstrap）で簡単なスタイリング -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- LIFF SDK -->
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFF 登録チェックサンプル</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            display: none;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 20px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        /* 未登録（新規）用のスタイル */
+        #unregistered-zone {
+            background-color: #f9f9f9;
+        }
+        /* 登録済み用のスタイル */
+        #registered-zone {
+            background-color: #e6f7ff;
+            border-color: #91d5ff;
+        }
+        #picture {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .error {
+            color: red;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 15px;
+        }
+        .badge-new { background-color: #52c41a; }
+        .badge-already { background-color: #1890ff; }
+    </style>
+    <!-- LINE LIFF SDK の読み込み -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
-<body class="bg-light">
+<body>
 
-  <div class="container py-5" style="max-width: 500px;">
-    <div class="card shadow-sm p-4">
-      <h2 class="h4 text-center mb-4">新規ユーザー登録</h2>
-      
-      <!-- ローディング表示（LIFF初期化中） -->
-      <div id="loading" class="text-center py-3">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-2 text-muted">LINE認証中...</p>
-      </div>
+    <h1>LIFF 状態確認</h1>
+    
+    <div id="loading">情報を読み込み、登録状態を確認しています...</div>
+    <div id="error-message" class="error"></div>
 
-      <!-- 入力フォーム（初期状態は非表示） -->
-      <form id="registerForm" class="d-none">
-        <!-- LINE ID は hidden で保持して自動送信 -->
-        <input type="hidden" id="lineId" name="lineId">
-
-        <div class="mb-3">
-          <label for="name" class="form-label">お名前</label>
-          <input type="text" class="form-control" id="name" required placeholder="山田 太郎">
-        </div>
-
-        <div class="mb-3">
-          <label for="email" class="form-label">メールアドレス</label>
-          <input type="email" class="form-control" id="email" required placeholder="example@email.com">
-        </div>
-
-        <button type="submit" id="submitBtn" class="btn btn-primary w-100 py-2">登録する</button>
-      </form>
-
-      <!-- 結果表示用 -->
-      <div id="message" class="mt-3 alert d-none"></div>
+    <!-- 【パターンA】まだスプレッドシートに登録されていない場合の表示 -->
+    <div id="unregistered-zone" class="container">
+        <div class="status-badge badge-new">新規ユーザー</div>
+        <p>こんにちは、<span class="user-name"></span> さん</p>
+        <p>あなたはまだスプレッドシートに登録されていません。</p>
+        <button onclick="registerUser()">このまま登録する</button>
     </div>
-  </div>
 
-  <script>
-    // --- 各種設定 ---
-    const LIFF_ID = '2010742995-6HPYymf9'; // あなたのLIFF IDを入力
-    const GAS_URL = 'https://script.google.com/macros/s/AKfycbypCXgf-qSXVyUFzuXyWIOLGo9BBoH2x_1Iz2fMwCcGe_rk-3ysxe9eljt0l6HPIr8Stw/exec'; // デプロイしたGASの「ウェブアプリURL」を入力
+    <!-- 【パターンB】すでにスプレッドシートに登録済みの場合の表示 -->
+    <div id="registered-zone" class="container">
+        <div class="status-badge badge-already">登録完了済み</div>
+        <img id="picture" src="" alt="プロフィール画像"><br><br>
+        <p>おかえりなさい、<span class="user-name"></span> さん！</p>
+        <p><strong>登録中のLINE_ID:</strong><br><code id="userId"></code></p>
+        <p style="color: #666; font-size: 0.9em;">※すでにスプレッドシートへの同期が完了しています。</p>
+    </div>
 
-    // LIFFの初期化
-    async function initializeLiff() {
-      try {
-        await liff.init({ liffId: LIFF_ID });
+    <script>
+        // あなたのLIFF IDを設定してください
+        const MY_LIFF_ID = '2010742995-6HPYymf9'; 
         
-        if (!liff.isLoggedIn()) {
-          // ログインしていなければログイン画面へ誘導
-          liff.login();
-        } else {
-          // ログイン済みならプロフィール情報を取得
-          const profile = await liff.getProfile();
-          
-          // LINE ID(userId)を取得してフォームにセット
-          document.getElementById('lineId').value = profile.userId;
-          
-          // ローディングを消してフォームを表示
-          document.getElementById('loading').classList.add('d-none');
-          document.getElementById('registerForm').classList.remove('d-none');
-        }
-      } catch (error) {
-        console.error('LIFF初期化エラー:', error);
-        showAlert('LINEとの連携に失敗しました。LINEアプリ内から再度開いてください。', 'danger');
-      }
-    }
+        // スプレッドシート側（GASなど）で作ったAPIのURLをここに設定します
+        const CHECK_API_URL = 'https://script.google.com/macros/s/AKfycbypCXgf-qSXVyUFzuXyWIOLGo9BBoH2x_1Iz2fMwCcGe_rk-3ysxe9eljt0l6HPIr8Stw/exec'; 
 
-    // フォーム送信イベントの処理
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const submitBtn = document.getElementById('submitBtn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = '送信中...';
+        let currentUserProfile = null;
 
-      const payload = {
-        lineId: document.getElementById('lineId').value,
-        name: document.getElementById('name').value,
-        email: document.getElementById('email').value
-      };
+        async function initializeLiff() {
+            try {
+                await liff.init({ liffId: MY_LIFF_ID });
 
-      try {
-        // GASにPOST送信
-        const response = await fetch(GAS_URL, {
-          method: 'POST',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'text/plain' // CORSエラー回避のため、GAS宛てはtext/plainが安定します
-          },
-          body: JSON.stringify(payload)
-        });
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
 
-        const result = await response.json();
+                // LINEプロフィールの取得
+                currentUserProfile = await liff.getProfile();
+                const lineId = currentUserProfile.userId;
 
-        if (result.status === 'success') {
-          showAlert('メンバー登録が完了しました！', 'success');
-          document.getElementById('registerForm').reset();
-          // 数秒後にLIFFウィンドウを閉じる
-          setTimeout(() => { liff.closeWindow(); }, 2000);
-        } else {
-          showAlert(result.message, 'danger');
-          submitBtn.disabled = false;
-          submitBtn.textContent = '登録する';
+                // スプレッドシートに登録済みか検証する関数を呼び出す
+                const isRegistered = await checkRegistration(lineId);
+
+                // 読み込み中表示を消す
+                document.getElementById('loading').style.display = 'none';
+
+                // 名前の表示などは共通でセット
+                const nameElements = document.getElementsByClassName('user-name');
+                for (let el of nameElements) {
+                    el.innerText = currentUserProfile.displayName;
+                }
+
+                if (isRegistered) {
+                    // 【登録済み】の表示に切り替え
+                    document.getElementById('registered-zone').style.display = 'block';
+                    document.getElementById('userId').innerText = lineId;
+                    if (currentUserProfile.pictureUrl) {
+                        document.getElementById('picture').src = currentUserProfile.pictureUrl;
+                    }
+                } else {
+                    // 【未登録】の表示に切り替え
+                    document.getElementById('unregistered-zone').style.display = 'block';
+                }
+
+            } catch (error) {
+                console.error(error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error-message').innerText = 'エラーが発生しました: ' + error.message;
+            }
         }
 
-      } catch (error) {
-        console.error('送信エラー:', error);
-        showAlert('通信エラーが発生しました。時間を置いて再度お試しください。', 'danger');
-        submitBtn.disabled = false;
-        submitBtn.textContent = '登録する';
-      }
-    });
+        // スプレッドシートにLINE_IDがあるか確認する擬似バリデーション
+        async function checkRegistration(lineId) {
+            // 注意: フロントエンド（JS）だけで直接スプレッドシートを検索することはできないため、
+            // 通常はGAS（Google Apps Script）などを経由してAPI形式で確認します。
+            
+            try {
+                // 実際の運用時はここを有効にします
+                /*
+                const response = await fetch(`${CHECK_API_URL}?userId=${lineId}`);
+                const data = await response.json();
+                return data.isRegistered; // true または false が返ってくる想定
+                */
+                
+                // --- テスト用のダミー処理 ---
+                // 動作確認用：3秒後に「未登録（false）」として返します。
+                // テストで「登録済み」の画面を見たい場合はここを true に書き換えてみてください。
+                return new Promise(resolve => setTimeout(() => resolve(false), 1500));
+                
+            } catch (e) {
+                console.error('登録検証APIの通信に失敗しました', e);
+                return false; 
+            }
+        }
 
-    // アラートメッセージ表示用のヘルパー関数
-    function showAlert(msg, type) {
-      const msgDiv = document.getElementById('message');
-      msgDiv.className = `mt-3 alert alert-${type}`;
-      msgDiv.textContent = msg;
-      msgDiv.classList.remove('d-none');
-    }
+        // 新規登録ボタンを押したときの処理（参考）
+        function registerUser() {
+            alert(currentUserProfile.displayName + 'さんを登録する処理（API送信など）をここに記述します。');
+        }
 
-    // ページ読み込み時にLIFF開始
-    initializeLiff();
-  </script>
+        window.onload = function() {
+            if (MY_LIFF_ID === 'YOUR_LIFF_ID_HERE') {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error-message').innerText = 'コード内の「YOUR_LIFF_ID_HERE」をご自身のLIFF IDに書き換えてください。';
+            } else {
+                initializeLiff();
+            }
+        };
+    </script>
 </body>
 </html>
