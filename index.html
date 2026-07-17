@@ -1,1 +1,100 @@
-ああああ
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFF プロフィール取得サンプル</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+        #profile-card {
+            display: none;
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            margin: 20px auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #picture {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+    <!-- LINE LIFF SDK の読み込み -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+
+    <h1>LIFF プロフィール情報</h1>
+    
+    <div id="loading">情報を読み込んでいます...</div>
+    <div id="error-message" class="error"></div>
+
+    <!-- プロフィール表示エリア -->
+    <div id="profile-card">
+        <img id="picture" src="" alt="プロフィール画像"><br><br>
+        <p><strong>ユーザーID (userId):</strong> <span id="userId"></span></p>
+        <p><strong>表示名 (displayName):</strong> <span id="displayName"></span></p>
+        <p><strong>ステータスメッセージ (statusMessage):</strong> <span id="statusMessage"></span></p>
+    </div>
+
+    <script>
+        // あなたのLIFF IDをここに貼り付けてください
+        const MY_LIFF_ID = '2010742995-6HPYymf9'; 
+
+        async function initializeLiff() {
+            try {
+                // LIFFの初期化
+                await liff.init({ liffId: MY_LIFF_ID });
+
+                // ログインしていない場合はログイン画面に誘導（LINEアプリ内ブラウザなら自動ログイン）
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                    return;
+                }
+
+                // プロフィール情報の取得
+                const profile = await liff.getProfile();
+
+                // 画面への反映
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('profile-card').style.display = 'block';
+
+                document.getElementById('userId').innerText = profile.userId;
+                document.getElementById('displayName').innerText = profile.displayName;
+                document.getElementById('statusMessage').innerText = profile.statusMessage || '（なし）';
+                
+                if (profile.pictureUrl) {
+                    document.getElementById('picture').src = profile.pictureUrl;
+                } else {
+                    document.getElementById('picture').alt = '画像なし';
+                }
+
+            } catch (error) {
+                console.error('LIFFの初期化またはプロフィールの取得に失敗しました', error);
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error-message').innerText = 'エラーが発生しました: ' + error.message;
+            }
+        }
+
+        // ページ読み込み時に実行
+        window.onload = function() {
+            if (MY_LIFF_ID === 'YOUR_LIFF_ID_HERE') {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error-message').innerText = 'コード内の「YOUR_LIFF_ID_HERE」をご自身のLIFF IDに書き換えてください。';
+            } else {
+                initializeLiff();
+            }
+        };
+    </script>
+</body>
+</html>
